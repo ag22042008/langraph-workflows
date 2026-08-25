@@ -2,9 +2,10 @@ import os
 from typing import TypedDict,Annotated
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
-from langgraph.graph import StateGraph,Start,END
+from langgraph.graph import StateGraph,START,END
 load_dotenv()
-llm=ChatGroq(model="llama-3.3-70b-versatile",temperature=0.1)
+llm=ChatGroq(model="openai/gpt-oss-120b",temperature=0.1)
+#reducers 
 def merge_score_dicts(existing: dict,new:dict)->dict:
     if existing is None:
         return new 
@@ -41,7 +42,7 @@ def cultural_score(State:Analyzer)->dict:
         "or cultural insensitivity that might offend a global audience. Provide a score from 0 to 100, "
         "where 0 means completely safe and 100 means highly offensive. "
         "Return ONLY the plain integer number, nothing else strictly on the base of text.\n\n"
-        f"text_provided:\n{'raw_input'}"
+        f"text_provided:\n{State['raw_input']}"
     )
     response=llm.invoke(prompt)
     try:
@@ -56,7 +57,8 @@ def copywright_node(State:Analyzer)->dict:
         "or presents a corporate trademark risk. Provide a score from 0 to 100, "
         "where 0 means entirely original and 100 means high risk. "
         "Return ONLY the plain integer number, nothing else.\n\n"
-        f"Text:\n{state['raw_text']}")
+         f"text_provided:\n{State['raw_input']}"
+        )
     response=llm.invoke(prompt)
     try:
       score=int(response.content.strip())
@@ -67,17 +69,33 @@ def copywright_node(State:Analyzer)->dict:
 
 graph=StateGraph(Analyzer)
 graph.add_node("cultural",cultural_score);
-graph.add_node("toxcicity",toxicity_detector);
+graph.add_node("toxicity",toxicity_detector);
 graph.add_node("copywright",copywright_node);
 
-graph.add_edge(Start,"cultural")
-graph.add_edge(Start,"toxicity")
-graph.add_edge(Start,"copywright")
+graph.add_edge(START,"cultural")
+graph.add_edge(START,"toxicity")
+graph.add_edge(START,"copywright")
 
-graph.add_edge("toxicity_node",END)
-graph.add_edge("copyright_check",END)
-graph.add_edge("culture_node",END)
+graph.add_edge("toxicity",END)
+graph.add_edge("copywright",END)
+graph.add_edge("cultural",END)
 
 app=graph.compile()
+sample_script="""
+ Honestly, trying to do business in that part of the world is a complete joke. 
+        Their entire culture is just backward and lazy compared to modern societies. 
+        Their traditional foods are disgusting, and their local customs make absolutely 
+        no sense for anyone trying to run a serious, civilized enterprise.
+
+
+"""
+initial_state={
+    "raw_input":sample_script,
+    "safety_score":{}#Intialized as an empty dictonary
+}
+# as we are invoking states dict it will also be giving out final state dict so ascess it using final state dict
+final_state=app.invoke(initial_state)
+print(final_state["safety_score"])
+
 
 
